@@ -1,0 +1,15 @@
+/shelf/
+/workspace.xml
+target/
+*.log
+*.tmp
+*.out
+*.class
+*.jar
+*.war
+*.ear
+.idea/
+*.iml
+*.iws
+.DS_Store
+Thumbs.db
