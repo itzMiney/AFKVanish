@@ -1,15 +1,20 @@
-/shelf/
-/workspace.xml
+# IntelliJ IDEA files
+.idea/
+
+# Build directories
 target/
+
+# Logs and temporary files
 *.log
 *.tmp
 *.out
+
+# Compiled files
 *.class
 *.jar
 *.war
 *.ear
-.idea/
-*.iml
-*.iws
+
+# OS-specific files
 .DS_Store
 Thumbs.db

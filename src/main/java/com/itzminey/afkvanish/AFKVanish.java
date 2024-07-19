@@ -1,15 +1,11 @@
 package com.itzminey.afkvanish;
 
 import com.earth2me.essentials.Essentials;
-import com.earth2me.essentials.User;
 import net.ess3.api.IUser;
 import net.ess3.api.events.AfkStatusChangeEvent;
 import net.luckperms.api.LuckPerms;
-import net.luckperms.api.context.ContextSet;
-import net.luckperms.api.context.ImmutableContextSet;
 import net.luckperms.api.model.user.UserManager;
 import net.luckperms.api.node.Node;
-import net.luckperms.api.node.NodeEqualityPredicate;
 import net.luckperms.api.node.types.PermissionNode;
 import org.bukkit.Bukkit;
 import org.bukkit.event.EventHandler;
@@ -19,18 +15,14 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.UUID;
 
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-
 public class AFKVanish extends JavaPlugin implements Listener {
 
-    private Essentials essentials;
     private LuckPerms luckPerms;
 
     @Override
     public void onEnable() {
         // Initialize EssentialsX
-        essentials = (Essentials) getServer().getPluginManager().getPlugin("Essentials");
+        Essentials essentials = (Essentials) getServer().getPluginManager().getPlugin("Essentials");
 
         if (essentials == null) {
             getLogger().severe("Essentials not found! Disabling plugin.");
@@ -68,7 +60,7 @@ public class AFKVanish extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onAfkStatusChange(AfkStatusChangeEvent event) {
-        IUser user = (User) event.getAffected();
+        IUser user = event.getAffected();
         UUID uuid = user.getBase().getUniqueId();
         UserManager userManager = luckPerms.getUserManager();
         net.luckperms.api.model.user.User lpUser = userManager.getUser(uuid);
@@ -81,29 +73,49 @@ public class AFKVanish extends JavaPlugin implements Listener {
         if (event.getValue()) { // Player is AFK
             addPermission(lpUser, "essentials.vanish");
             addPermission(lpUser, "essentials.vanish.effect");
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "essentials:vanish " + user.getName());
+
+            // Ensure permissions are saved before executing the vanish command
+            userManager.saveUser(lpUser).thenRun(() -> {
+                Bukkit.getScheduler().runTask(this, () -> {
+                    // Execute vanish command
+                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "essentials:vanish " + user.getName());
+                });
+            });
+
         } else { // Player is no longer AFK
-            removePermission(lpUser, "essentials.vanish");
-            removePermission(lpUser, "essentials.vanish.effect");
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "essentials:vanish " + user.getName());
+            // Execute un-vanish command
+            Bukkit.getScheduler().runTask(this, () -> {
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "essentials:vanish " + user.getName());
+                // After the vanish command, remove permissions
+                userManager.saveUser(lpUser).thenRun(() -> {
+                    removePermission(lpUser, "essentials.vanish");
+                    removePermission(lpUser, "essentials.vanish.effect");
+                });
+            });
         }
     }
 
     private void addPermission(net.luckperms.api.model.user.User user, String permission) {
         Node node = PermissionNode.builder(permission).build();
-        ImmutableContextSet context = luckPerms.getContextManager().getStaticContext();
-        if (user.data().contains(node, (NodeEqualityPredicate) context).asBoolean()) {
+        luckPerms.getContextManager().getStaticContext();
+
+        // Check if the user does not already have the permission
+        if (!user.getNodes().contains(node)) {
             user.data().add(node);
-            luckPerms.getUserManager().saveUser(user);
+            luckPerms.getUserManager().saveUser(user).join(); // Ensure the save operation completes
+            getLogger().info("Added permission: " + permission + " to user: " + user.getUsername());
         }
     }
 
     private void removePermission(net.luckperms.api.model.user.User user, String permission) {
         Node node = PermissionNode.builder(permission).build();
-        ImmutableContextSet context = luckPerms.getContextManager().getStaticContext();
-        if (user.data().contains(node, (NodeEqualityPredicate) context).asBoolean()) {
+        luckPerms.getContextManager().getStaticContext();
+
+        // Check if the user has the permission
+        if (user.getNodes().contains(node)) {
             user.data().remove(node);
-            luckPerms.getUserManager().saveUser(user);
+            luckPerms.getUserManager().saveUser(user).join(); // Ensure the save operation completes
+            getLogger().info("Removed permission: " + permission + " from user: " + user.getUsername());
         }
     }
 }
